@@ -30,7 +30,6 @@ jobs:
       name: jpackage
       run: >
         jpackage 
-          --verbose
           --input target/ 
           --name sterling 
           --main-jar sterling-1.0-SNAPSHOT.jar 
