@@ -37,6 +37,11 @@ jobs:
         --type exe 
         --dest ./dist
 
+    - id: listdist
+      name: List Dist
+      run: |
+        ls dist
+
     - id: upload-installer
       name: Upload installer
       uses: actions/upload-artifact@v4
