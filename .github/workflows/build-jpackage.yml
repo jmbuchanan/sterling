@@ -24,14 +24,14 @@ jobs:
 # BUILD FOR DISTRIBUTION
     - id: build
       name: Build distribution
-      run: |
-        mvn package
-        jpackage --input target/ \
-          --name sterling \
-          --main-jar sterling-1.0-SNAPSHOT.jar \
-          --main-class com.sterling.automation.App \
-          --type exe \
-          --dest ./dist
+      run: >
+        mvn package &&
+        jpackage --input target/ 
+        --name sterling 
+        --main-jar sterling-1.0-SNAPSHOT.jar 
+        --main-class com.sterling.automation.App 
+        --type exe 
+        --dest ./dist
 
 # SAVE INSTALLER
     - id: upload-installer
