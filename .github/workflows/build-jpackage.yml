@@ -21,19 +21,23 @@ jobs:
         distribution: 'temurin'
         java-version: 17
 
-# BUILD FOR DISTRIBUTION
-    - id: build
-      name: Build distribution
-      run: >
-        mvn package &&
-        jpackage --input target/ 
-        --name sterling 
-        --main-jar sterling-1.0-SNAPSHOT.jar 
-        --main-class com.sterling.automation.App 
-        --type exe 
-        --dest ./dist
+    - id: package
+      name: Maven Package
+      run: |
+        mvn package
 
-# SAVE INSTALLER
+    - id: jpackage
+      name: jpackage
+      run: >
+        jpackage 
+          --verbose
+          --input target/ 
+          --name sterling 
+          --main-jar sterling-1.0-SNAPSHOT.jar 
+          --main-class com.sterling.automation.App 
+          --type exe 
+          --dest ./dist
+
     - id: upload-installer
       name: Upload installer
       uses: actions/upload-artifact@v4
