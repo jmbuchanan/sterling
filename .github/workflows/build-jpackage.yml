@@ -30,12 +30,12 @@ jobs:
       name: jpackage
       run: >
         jpackage 
-          --input target/ 
-          --name sterling 
-          --main-jar sterling-1.0-SNAPSHOT.jar 
-          --main-class com.sterling.automation.App 
-          --type exe 
-          --dest ./dist
+        --input target/ 
+        --name sterling 
+        --main-jar sterling-1.0-SNAPSHOT.jar 
+        --main-class com.sterling.automation.App 
+        --type exe 
+        --dest ./dist
 
     - id: upload-installer
       name: Upload installer
