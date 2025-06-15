@@ -1,5 +1,8 @@
 name: build installers
 
+on:
+  workflow_dispatch:
+
 jobs:
 
   build-windows-installer:
