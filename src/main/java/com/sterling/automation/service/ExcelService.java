@@ -1,9 +1,7 @@
 package com.sterling.automation.service;
 
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,34 +17,26 @@ import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 import com.sterling.automation.domain.DistributionAccount;
+import com.sterling.automation.dto.ValidationResponse;
 
 public class ExcelService {
-
-    private static final String HEADER_ROW_INDICATOR = "Distribution account";
-
-    private static final int BUDGET_LOT_NAME_ROW = 0;
-    private static final int BUDGET_LOT_NAME_COLUMN = 3;
 
     //matches: "   123456 EXAMPLE ACCOUNT  "
     private static final Pattern ACTUALS_ACCOUNT_NAME_REGEX = Pattern.compile("^\\s*\\d{6}\\s.*");
     private static final Pattern BUDGET_ACCOUNT_NAME_REGEX = Pattern.compile("^\\d{6}$");
 
-    public void process(final String budget, final String actuals) {
+    public void process(final ValidationResponse response) {
 
-        Sheet budgetSheet = loadWorkbook(budget).getSheetAt(0);
+        Sheet actualsSheet = response.input().getSheetAt(0);
+        Sheet budgetSheet = response.output().getSheetAt(0);
 
-        String lotName = 
-            budgetSheet
-                .getRow(BUDGET_LOT_NAME_ROW)
-                .getCell(BUDGET_LOT_NAME_COLUMN)
-                .getStringCellValue();
-
-        Sheet actualsSheet = loadWorkbook(actuals).getSheetAt(0);
-
-        List<DistributionAccount> actualsAccounts = getAccountsFromActuals(actualsSheet, lotName);
+        List<DistributionAccount> actualsAccounts = 
+            getAccountsFromActuals(
+                actualsSheet, 
+                response.lotName(), 
+                response.columnIndexOfActuals());
 
         List<DistributionAccount> consolidatedAccounts = addBudgetInfo(budgetSheet, actualsAccounts);
 
@@ -95,33 +85,7 @@ public class ExcelService {
         }
     }
 
-    private List<DistributionAccount> getAccountsFromActuals(final Sheet actualsSheet, final String lotName) {
-
-        int headerRow = -1;
-
-        for (Row row : actualsSheet) {
-            if (HEADER_ROW_INDICATOR.equals(row.getCell(0).getStringCellValue())) {
-                headerRow = row.getRowNum();
-            }
-        }
-
-        if (headerRow < 0) {
-            System.err.println("No header found in actuals");
-        }
-
-        Row actualsLotNameRow = actualsSheet.getRow(headerRow);
-
-        int columnOfActuals = -1; 
-
-        for (Cell cell: actualsLotNameRow) {
-            if (lotName.equals(cell.getStringCellValue())) {
-                columnOfActuals = cell.getColumnIndex();
-            }
-        }
-
-        if (columnOfActuals < 0) {
-            System.err.println("No matching account found in actuals");
-        }
+    private List<DistributionAccount> getAccountsFromActuals(final Sheet actualsSheet, final String lotName, final int columnOfActuals) {
 
         List<DistributionAccount> actualsAccounts = new ArrayList<>();
 
@@ -159,12 +123,10 @@ public class ExcelService {
         for (Row row: budget) {
 
             if (row.getCell(0) == null) {
-                System.out.println("Rows first cell is null");
                 break;
             }
 
             if (row.getCell(0).getCellType().equals(CellType.BLANK)) {
-                System.out.println("Rows first cell is blank");
                 continue;
             }
 
@@ -244,16 +206,5 @@ public class ExcelService {
         results.sort((a1, a2) -> a1.id().compareTo(a2.id()));
 
         return results;
-    }
-
-    private Workbook loadWorkbook(final String filePath) {
-        try (InputStream file = new FileInputStream(filePath)) {
-                
-            return WorkbookFactory.create(file);
-
-        } catch (IOException ioException) {
-            System.err.println(ioException.getMessage());
-            return null;
-        }
     }
 }
