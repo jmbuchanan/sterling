@@ -34,8 +34,8 @@ public class InputService {
 
         return ImmutablePair.of(
             filesInDir.get(quickBooksExportIndex - 1), 
-            filesInDir.get(budgetIndex - 1));
-
+            filesInDir.get(budgetIndex - 1)
+        );
     }
 
     private List<String> getFilesInCurrentDirectory() {

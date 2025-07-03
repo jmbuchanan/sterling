@@ -22,14 +22,12 @@ public class App {
         ValidationService validationService = new ValidationService();
         ExcelService excelService = new ExcelService();
 
-        boolean isInputCorrect = false;
-
         ValidationResponse response = null;
         Scanner scanner = new Scanner(System.in);
         do {
             ImmutablePair<String, String> files = inputService.getFileBasedOnInput(scanner);
             response = validationService.isValidInputOutput(scanner, files.getLeft(), files.getRight());
-        } while (!isInputCorrect);
+        } while (!response.isValid());
 
         excelService.process(response);
 

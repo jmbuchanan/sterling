@@ -3,14 +3,13 @@ package com.sterling.automation.service;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.regex.Pattern;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.FillPatternType;
@@ -20,7 +19,9 @@ import org.apache.poi.ss.usermodel.Workbook;
 
 import com.sterling.automation.domain.DistributionAccount;
 import com.sterling.automation.dto.ValidationResponse;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+@Slf4j
 public class ExcelService {
 
     //matches: "   123456 EXAMPLE ACCOUNT  "
@@ -40,12 +41,17 @@ public class ExcelService {
 
         List<DistributionAccount> consolidatedAccounts = addBudgetInfo(budgetSheet, actualsAccounts);
 
-        Workbook wb = new HSSFWorkbook();
+        Workbook wb = new XSSFWorkbook();
         wb.createSheet();
 
         Sheet outputSheet = wb.getSheetAt(0);
 
-        try  (OutputStream fileOut = new FileOutputStream("output.xlsx")) {
+        Date date = new Date();
+        DateFormat df = new SimpleDateFormat("yyyy-MM-dd hhmma");
+
+        df.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+
+        try  (OutputStream fileOut = new FileOutputStream(String.format("%s Reconciled %s.xlsx", response.lotName(), df.format(date)))) {
 
             CellStyle missingFromActualsCellStyle = wb.createCellStyle();
             missingFromActualsCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
@@ -60,7 +66,9 @@ public class ExcelService {
                 Row row = outputSheet.createRow(i);
                 DistributionAccount account = consolidatedAccounts.get(i);
 
-                row.createCell(0).setCellValue(Float.valueOf(account.id()));
+                log.info(account.toString());
+
+                row.createCell(0).setCellValue(Float.parseFloat(account.id()));
                 row.createCell(1).setCellValue(account.name());
                 row.createCell(2).setCellValue(account.budget());
                 row.createCell(3).setCellValue(account.actuals());
@@ -81,7 +89,8 @@ public class ExcelService {
             wb.close();
 
         } catch (IOException e) {
-            System.err.println(e.getMessage());
+            log.error("Something went wrong...");
+            log.error(e.getMessage());
         }
     }
 
@@ -203,7 +212,7 @@ public class ExcelService {
             }
         }
 
-        results.sort((a1, a2) -> a1.id().compareTo(a2.id()));
+        results.sort(Comparator.comparing(DistributionAccount::id));
 
         return results;
     }

@@ -1,11 +1,13 @@
 package com.sterling.automation.service;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Scanner;
 import java.util.regex.Pattern;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.sl.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -14,6 +16,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 import com.sterling.automation.dto.ValidationResponse;
 
+@Slf4j
 public class ValidationService {
 
     private static final Pattern  ACTUALS_ACCOUNT_NAME_REGEX = Pattern.compile("^\\s*\\d{6}\\s.*");
@@ -41,24 +44,30 @@ public class ValidationService {
 
         Workbook actualsWorkbook = loadWorkbook(actuals);
 
-        boolean doActualsContainRequestedLot = doActualsContainRequestedLot(lotName, actualsWorkbook);
+        //boolean doActualsContainRequestedLot = doActualsContainRequestedLot(lotName, actualsWorkbook);
+
 
         return ValidationResponse.builder()
                     .lotName(lotName)
                     .input(actualsWorkbook)
                     .output(budgetWorkbook)
-                    .isValid(isValid)
+                    .isValid(true) //TODO:update
+                    .columnIndexOfActuals(1) //TODO:update
                     .build();
     }
 
     private Workbook loadWorkbook(final String filePath) {
 
-        try (InputStream file = new FileInputStream(filePath)) {
-                
-            return WorkbookFactory.create(file);
+        File file = new File(filePath);
+
+        log.info("filepath={} and File.exists() = {}", filePath, file.exists());
+
+        try (InputStream inputStream = new FileInputStream(file)) {
+
+            return WorkbookFactory.create(inputStream);
 
         } catch (IOException ioException) {
-            System.err.println(ioException.getMessage());
+            log.error(ioException.getMessage());
             return null;
         }
     }
