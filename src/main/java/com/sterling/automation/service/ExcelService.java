@@ -1,25 +1,24 @@
 package com.sterling.automation.service;
 
+import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.OutputStream;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Pattern;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFFormulaEvaluator;
 
 import com.sterling.automation.domain.DistributionAccount;
 import com.sterling.automation.dto.ValidationResponse;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 @Slf4j
 public class ExcelService {
@@ -39,57 +38,124 @@ public class ExcelService {
                 response.lotName(), 
                 response.columnIndexOfActuals());
 
-        List<DistributionAccount> consolidatedAccounts = addBudgetInfo(budgetSheet, actualsAccounts);
+        ImmutablePair<Integer, List<DistributionAccount>> budgetInfo = addBudgetInfo(budgetSheet, actualsAccounts);
+        int firstRowOfBudget = budgetInfo.getLeft();
+        List<DistributionAccount> consolidatedAccounts = budgetInfo.getRight();
 
-        Workbook wb = new XSSFWorkbook();
-        wb.createSheet();
+        Workbook budgetWb = response.output();
 
-        Sheet outputSheet = wb.getSheetAt(0);
+        CellStyle firstColumnCellStyle = budgetSheet.getRow(firstRowOfBudget).getCell(0).getCellStyle();
 
-        Date date = new Date();
-        DateFormat df = new SimpleDateFormat("yyyy-MM-dd hhmma");
+        CellStyle missingFromActualsCellStyle = budgetWb.createCellStyle();
+        missingFromActualsCellStyle.cloneStyleFrom(firstColumnCellStyle);
+        missingFromActualsCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        missingFromActualsCellStyle.setFillForegroundColor(IndexedColors.AQUA.getIndex());
 
-        df.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+        CellStyle missingFromBudgetCellStyle = budgetWb.createCellStyle();
+        missingFromBudgetCellStyle.cloneStyleFrom(firstColumnCellStyle);
+        missingFromBudgetCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        missingFromBudgetCellStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
 
-        try  (OutputStream fileOut = new FileOutputStream(String.format("%s Reconciled %s.xlsx", response.lotName(), df.format(date)))) {
+        for (int i = 0; i < consolidatedAccounts.size(); i++) {
 
-            CellStyle missingFromActualsCellStyle = wb.createCellStyle();
-            missingFromActualsCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            missingFromActualsCellStyle.setFillForegroundColor(IndexedColors.AQUA.getIndex());
+            int rowIndex = firstRowOfBudget + i;
+            boolean shiftAfterInsert = false;
 
-            CellStyle missingFromBudgetCellStyle = wb.createCellStyle();
-            missingFromBudgetCellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            missingFromBudgetCellStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+            Row row = budgetSheet.getRow(rowIndex);
 
-            for (int i = 0; i < consolidatedAccounts.size(); i++) {
+            if (row == null) {
+                row = budgetSheet.createRow(rowIndex);
+            }
 
-                Row row = outputSheet.createRow(i);
-                DistributionAccount account = consolidatedAccounts.get(i);
+            if (row.getCell(0) == null) {
+                shiftAfterInsert = true;
+            } else {
 
-                log.info(account.toString());
+                String firstColumnValue = null;
 
-                row.createCell(0).setCellValue(Float.parseFloat(account.id()));
-                row.createCell(1).setCellValue(account.name());
-                row.createCell(2).setCellValue(account.budget());
-                row.createCell(3).setCellValue(account.actuals());
-                row.createCell(4).setCellFormula(String.format("$C%d-$D%d", i + 1, i + 1));
-                row.createCell(5).setCellValue(String.format("Found in actuals: %b", account.existsInActuals()));
-                row.createCell(6).setCellValue(String.format("Found in budget: %b", account.existsInBudget()));
 
-                if (account.existsInBudget() && !account.existsInActuals()) {
-                    row.getCell(0).setCellStyle(missingFromActualsCellStyle);
+                if (row.getCell(0).getCellType().equals(CellType.NUMERIC)) {
+                    firstColumnValue = String.format("%.0f", row.getCell(0).getNumericCellValue());
                 }
 
-                if (account.existsInActuals() && !account.existsInBudget()) {
-                    row.getCell(0).setCellStyle(missingFromBudgetCellStyle);
+                if (row.getCell(0).getCellType().equals(CellType.STRING)) {
+                    firstColumnValue = String.valueOf(row.getCell(0).getStringCellValue());
+                }
+
+                if (!BUDGET_ACCOUNT_NAME_REGEX.matcher(firstColumnValue).matches()) {
+                    budgetSheet.shiftRows(rowIndex, budgetSheet.getLastRowNum(), 1);
+                    row = budgetSheet.createRow(rowIndex);
                 }
             }
 
-            wb.write(fileOut);
-            wb.close();
 
-        } catch (IOException e) {
-            log.error("Something went wrong...");
+            DistributionAccount account = consolidatedAccounts.get(i);
+
+            row.createCell(0).setCellValue(Float.parseFloat(account.id()));
+            row.createCell(1).setCellValue(account.name());
+            row.createCell(2).setCellValue(account.budget());
+            row.createCell(3).setCellValue(account.actuals());
+            row.createCell(4).setCellFormula(String.format("$C%d-$D%d", rowIndex + 1, rowIndex + 1));
+
+            if (account.existsInBudget() && !account.existsInActuals()) {
+                row.getCell(0).setCellStyle(missingFromActualsCellStyle);
+            }
+
+            if (account.existsInActuals() && !account.existsInBudget()) {
+                row.getCell(0).setCellStyle(missingFromBudgetCellStyle);
+            }
+
+            if (shiftAfterInsert) {
+                budgetSheet.shiftRows(rowIndex + 1, budgetSheet.getLastRowNum(), 1);
+            }
+        }
+
+        int i = 0;
+        boolean keepGoing = true;
+        int lastRowOfBudget = firstRowOfBudget + consolidatedAccounts.size();
+        int costsRow = 0;
+
+        do {
+
+            Row row = budgetSheet.getRow(lastRowOfBudget + i);
+            i++;
+
+            if (row != null &&
+                row.getCell(0) != null && 
+                row.getCell(0).getCellType() != null &&
+                row.getCell(0).getCellType().equals(CellType.STRING)) {
+
+                String firstColumnValue = String.valueOf(row.getCell(0).getStringCellValue());
+
+                if (firstColumnValue.trim().equals("Total Costs")) {
+                    costsRow = row.getRowNum();
+                    row.getCell(2).setCellFormula(String.format("SUM(C%d:C%d)", firstRowOfBudget + 1, lastRowOfBudget));
+                    row.getCell(3).setCellFormula(String.format("SUM(D%d:D%d)", firstRowOfBudget + 1, lastRowOfBudget));
+                }
+
+                if (firstColumnValue.trim().equals("Profit")) {
+                    row.getCell(2).setCellFormula(String.format("SUM(C%d:C%d) - C%d", lastRowOfBudget + 1, costsRow, costsRow + 1));
+                    row.getCell(3).setCellFormula(String.format("SUM(D%d:D%d) - D%d", lastRowOfBudget + 1, costsRow, costsRow + 1));
+                    keepGoing = false;
+                }
+            }
+        } while (keepGoing && i < 20);
+
+        if (i >= 20) {
+            log.error("Couldn't find profit row");
+        }
+
+        XSSFFormulaEvaluator.evaluateAllFormulaCells(budgetWb);
+
+        File budgetFile = new File(response.budgetPath());
+
+
+        try (OutputStream outputStream = new FileOutputStream(budgetFile)) {
+            budgetWb.write(outputStream);
+            budgetWb.close();
+            System.out.println("Done.");
+        } catch (Exception e) {
+            log.error("Couldn't save budget file for some reason.");
             log.error(e.getMessage());
         }
     }
@@ -99,6 +165,10 @@ public class ExcelService {
         List<DistributionAccount> actualsAccounts = new ArrayList<>();
 
         for (Row row: actualsSheet) {
+
+            if (row.getCell(0) == null) {
+                continue;
+            }
 
             String firstColumnValue = row.getCell(0).getStringCellValue();
 
@@ -125,9 +195,12 @@ public class ExcelService {
         return actualsAccounts;
     }
 
-    private List<DistributionAccount> addBudgetInfo(final Sheet budget, final List<DistributionAccount> actualsAccounts) {
+    private ImmutablePair<Integer, List<DistributionAccount>> addBudgetInfo(final Sheet budget, final List<DistributionAccount> actualsAccounts) {
 
+        int firstAccountRowIndex = -1;
         List<DistributionAccount> results = new ArrayList<>();
+
+        boolean firstFound = false;
 
         for (Row row: budget) {
 
@@ -150,6 +223,11 @@ public class ExcelService {
             }
 
             if (BUDGET_ACCOUNT_NAME_REGEX.matcher(firstColumnValue).matches()) {
+
+                if (!firstFound) {
+                    firstAccountRowIndex = row.getRowNum();
+                    firstFound = true;
+                }
 
                 String budgetAccountId = firstColumnValue;
 
@@ -214,6 +292,6 @@ public class ExcelService {
 
         results.sort(Comparator.comparing(DistributionAccount::id));
 
-        return results;
+        return ImmutablePair.of(firstAccountRowIndex, results);
     }
 }

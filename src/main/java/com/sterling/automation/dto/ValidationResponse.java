@@ -10,6 +10,7 @@ public record ValidationResponse (
     Workbook output,
     boolean isValid,
     int columnIndexOfActuals,
+    String budgetPath,
     String lotName
 ){}
 

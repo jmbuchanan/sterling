@@ -8,7 +8,6 @@ import java.util.Scanner;
 import java.util.regex.Pattern;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.sl.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -26,8 +25,6 @@ public class ValidationService {
 
     public ValidationResponse isValidInputOutput(final Scanner scanner, final String actuals, final String budget) {
 
-        boolean isValid = false;
-
         Workbook budgetWorkbook = loadWorkbook(budget);
         String lotName = getLotName(budgetWorkbook);
         boolean isValidName = isValidName(lotName);
@@ -44,23 +41,25 @@ public class ValidationService {
 
         Workbook actualsWorkbook = loadWorkbook(actuals);
 
-        //boolean doActualsContainRequestedLot = doActualsContainRequestedLot(lotName, actualsWorkbook);
+        int actualsColumnIndex = getActualsColumnIndex(lotName, actualsWorkbook);
 
+        if (actualsColumnIndex < 0) {
+            return ValidationResponse.builder().isValid(false).build();
+        }
 
         return ValidationResponse.builder()
                     .lotName(lotName)
                     .input(actualsWorkbook)
                     .output(budgetWorkbook)
-                    .isValid(true) //TODO:update
-                    .columnIndexOfActuals(1) //TODO:update
+                    .isValid(true) 
+                    .columnIndexOfActuals(actualsColumnIndex)
+                    .budgetPath(budget)
                     .build();
     }
 
     private Workbook loadWorkbook(final String filePath) {
 
         File file = new File(filePath);
-
-        log.info("filepath={} and File.exists() = {}", filePath, file.exists());
 
         try (InputStream inputStream = new FileInputStream(file)) {
 
@@ -92,36 +91,34 @@ public class ValidationService {
         return ACTUALS_ACCOUNT_NAME_REGEX.matcher(lotName).matches();
     }
 
-    private boolean doActualsContainRequestedLot(final String lotName, final Workbook actuals) {
+    private int getActualsColumnIndex(final String lotName, final Workbook actuals) {
 
-        boolean result = false;
+        int result = -1;
 
         int headerRow = -1;
 
         for (Row row : actuals.getSheetAt(0)) {
-            if (HEADER_ROW_INDICATOR.equals(row.getCell(0).getStringCellValue())) {
+            if (row.getCell(0) != null && HEADER_ROW_INDICATOR.equals(row.getCell(0).getStringCellValue())) {
                 headerRow = row.getRowNum();
             }
         }
 
         if (headerRow < 0) {
             System.err.println("No header found in actuals");
+            return result;
         }
 
         Row actualsLotNameRow = actuals.getSheetAt(0).getRow(headerRow);
 
-        int columnOfActuals = -1; 
-
         for (Cell cell: actualsLotNameRow) {
             if (lotName.equals(cell.getStringCellValue())) {
-                columnOfActuals = cell.getColumnIndex();
+                result = cell.getColumnIndex();
             }
         }
 
-        if (columnOfActuals < 0) {
+        if (result < 0) {
             System.err.println("No matching account found in actuals");
         }
-
 
         return result;
     }

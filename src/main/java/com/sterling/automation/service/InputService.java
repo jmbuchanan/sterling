@@ -29,6 +29,7 @@ public class InputService {
 
         System.out.print("Enter the number of the Budget: ");
         int budgetIndex = scanner.nextInt();
+        System.out.println("");
         //handle newline
         scanner.nextLine();
 
